@@ -8,18 +8,14 @@ from .models import Conversation
 def new_conversation(request, item_pk):
     item = get_object_or_404(Item, pk=item_pk)
 
-    # Redirect if the user is the one who created the item
     if item.created_by == request.user:
         return redirect('dashboard:index')
     
-    # Check if the conversation already exists
     conversations = Conversation.objects.filter(item=item).filter(members__in=[request.user.id])
 
     if conversations:
-        # Assuming you want to redirect to an existing conversation
-        return redirect('conversation:detail', conversation_pk=conversations.first().pk)
+        return redirect('conversation:detail', pk=conversations.first().id)
 
-    # Handle POST request
     if request.method == 'POST':
         form = ConversationMessageForm(request.POST)
 
@@ -38,7 +34,6 @@ def new_conversation(request, item_pk):
     else:
         form = ConversationMessageForm()
 
-    # Render the form
     return render(request, 'conversation/new.html', {
         'form': form,
         'item': item,
@@ -46,16 +41,31 @@ def new_conversation(request, item_pk):
 
 @login_required
 def inbox(request):
-      conversations = Conversation.objects.filter(members__in=[request.user.id])
+    conversations = Conversation.objects.filter(members__in=[request.user.id])
+    return render(request, 'conversation/inbox.html', {
+        'conversations': conversations
+    })
 
-      return render(request, 'conversation/inbox.html', {
-          'conversations': conversations
-      })
 
 @login_required
 def detail(request, pk):
-    conversations = Conversation.objects.filter(members__in=[request.user.id]).get(pk=pk)
+    conversation = get_object_or_404(Conversation, pk=pk, members__in=[request.user.id])
+
+    if request.method == 'POST':
+        form = ConversationMessageForm(request.POST)
+        if form.is_valid():
+            conversation_message = form.save(commit=False)
+            conversation_message.conversation = conversation
+            conversation_message.created_by = request.user
+            conversation_message.save()
+
+            # No need to call conversation.save() as it's not being modified
+            return redirect('conversation:detail', pk=pk)
+    else:
+        form = ConversationMessageForm()  # Initialize the form for GET requests
 
     return render(request, 'conversation/detail.html', {
-        'conversations': conversations
+        'conversation': conversation,
+        'form': form
     })
+
